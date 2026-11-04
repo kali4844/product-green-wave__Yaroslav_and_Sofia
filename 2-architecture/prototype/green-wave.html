@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Зелёная волна — калькулятор светофоров</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f7fa;--card:#fff;--tx:#1b2430;--mut:#64707f;--bd:#dde3ea;--ac:#2563eb;--gr:#16a34a;--rd:#dc2626;--car:#f59e0b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141b;--card:#18202a;--tx:#e8edf3;--mut:#93a0b0;--bd:#2a3542;--ac:#60a5fa;--gr:#4ade80;--rd:#f87171;--car:#fbbf24}}
+:root[data-theme="dark"]{--bg:#0f141b;--card:#18202a;--tx:#e8edf3;--mut:#93a0b0;--bd:#2a3542;--ac:#60a5fa;--gr:#4ade80;--rd:#f87171;--car:#fbbf24}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0}
+p.sub{margin:0 0 14px;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:16px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+label{display:block;font-size:12px;color:var(--mut)}
+input{width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+button{padding:9px 14px;border:0;border-radius:8px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+button.del{background:transparent;color:var(--rd);border:1px solid var(--bd);padding:6px 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:5px 6px;text-align:left;font-size:13px;border-bottom:1px solid var(--bd)}
+th{color:var(--mut);font-weight:600}
+td input{min-width:70px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+.kpi{border:1px solid var(--bd);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:20px}
+.kpi span{font-size:12px;color:var(--mut)}
+.msg{padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--bd);margin-bottom:10px}
+.ok{color:var(--gr);font-weight:600}.bad{color:var(--rd);font-weight:600}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:6px}
+.leg i{display:inline-block;width:18px;height:4px;vertical-align:middle;margin-right:5px;border-radius:2px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--mut);font-size:11px}
+</style>
+</head>
+<body>
+<main>
+<h1>🚦 Зелёная волна</h1>
+<p class="sub">Расчёт времени и средней скорости автомобиля и настройка светофоров под «зелёную волну».</p>
+
+<div class="card">
+<h2>1. Параметры маршрута и автомобиля</h2>
+<div class="grid">
+<div><label>Длина маршрута, м</label><input id="L" type="number" value="1600"></div>
+<div><label>Скорость автомобиля, км/ч</label><input id="v" type="number" value="50"></div>
+<div><label>Мин. допустимая скорость, км/ч</label><input id="vmin" type="number" value="20"></div>
+<div><label>Макс. допустимая скорость, км/ч</label><input id="vmax" type="number" value="60"></div>
+<div><label>Момент старта, с (в цикле)</label><input id="t0" type="number" value="0"></div>
+<div><label>Запас до смены сигнала, с</label><input id="mg" type="number" value="3"></div>
+<div><label>Длина колонны машин, с</label><input id="pl" type="number" value="10"></div>
+</div>
+</div>
+
+<div class="card">
+<h2>2. Светофоры</h2>
+<div class="tw"><table>
+<thead><tr><th>№</th><th>Расстояние от старта, м</th><th>Зелёный, с</th><th>Красный, с</th><th>Сдвиг фазы, с</th><th></th></tr></thead>
+<tbody id="tb"></tbody></table></div>
+<div class="row">
+<button class="sec" id="add">+ Добавить светофор</button>
+<button id="auto">Рассчитать всё автоматически</button>
+<button id="find">Оптимальная скорость</button>
+<button id="opt">Оптимальный зелёный и фазы</button>
+<button class="sec" id="reset">Сбросить пример</button>
+</div>
+<p class="sub" style="margin:10px 0 0;font-size:13px">«Сдвиг фазы» — момент (с), когда у светофора включается зелёный в первом цикле. Жёлтый сигнал входит в красный. Оптимальное время зелёного = длина колонны + 2 × запас: этого хватает для основного потока, а остаток цикла отдаётся поперечному направлению. Длина цикла (зелёный + красный) не меняется.</p>
+</div>
+
+<div class="card">
+<h2>3. Результат</h2>
+<div id="msg" class="msg"></div>
+<div class="kpis" id="kpis"></div>
+<div class="tw"><table><thead><tr><th>Светофор</th><th>Прибытие, с</th><th>Сигнал</th><th>Ожидание, с</th><th>Оптимальный зелёный, с</th><th>Оптимальный сдвиг, с</th></tr></thead><tbody id="res"></tbody></table></div>
+</div>
+
+<div class="card">
+<h2>4. График «время — расстояние»</h2>
+<div id="chart"></div>
+<div class="leg"><span><i style="background:var(--gr)"></i>зелёный</span><span><i style="background:var(--rd)"></i>красный</span><span><i style="background:var(--car)"></i>путь автомобиля</span></div>
+</div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const DEF=[{d:300,g:30,r:30,o:0},{d:650,g:30,r:30,o:10},{d:1000,g:30,r:30,o:20},{d:1400,g:30,r:30,o:5}];
+let lights=JSON.parse(JSON.stringify(DEF));
+const num=id=>parseFloat($(id).value)||0;
+const f1=x=>(Math.round(x*10)/10).toString();
+
+function buildTable(){
+  $('tb').innerHTML=lights.map((s,i)=>`<tr><td>${i+1}</td>
+  <td><input type="number" data-i="${i}" data-k="d" value="${s.d}"></td>
+  <td><input type="number" data-i="${i}" data-k="g" value="${s.g}"></td>
+  <td><input type="number" data-i="${i}" data-k="r" value="${s.r}"></td>
+  <td><input type="number" data-i="${i}" data-k="o" value="${s.o}"></td>
+  <td><button class="del" data-del="${i}">✕</button></td></tr>`).join('');
+}
+$('tb').addEventListener('input',e=>{
+  const t=e.target; if(!t.dataset.k)return;
+  lights[+t.dataset.i][t.dataset.k]=parseFloat(t.value)||0; render();
+});
+$('tb').addEventListener('click',e=>{
+  if(e.target.dataset.del!==undefined){lights.splice(+e.target.dataset.del,1);buildTable();render();}
+});
+$('add').onclick=()=>{const l=lights[lights.length-1];lights.push({d:(l?l.d:0)+300,g:30,r:30,o:0});buildTable();render();};
+$('reset').onclick=()=>{lights=JSON.parse(JSON.stringify(DEF));$('L').value=1600;$('v').value=50;buildTable();render();};
+['L','v','vmin','vmax','t0','mg','pl'].forEach(id=>$(id).addEventListener('input',render));
+
+function sorted(){return lights.map(s=>({...s,C:Math.max(s.g+s.r,0.1)})).sort((a,b)=>a.d-b.d);}
+
+function sim(vk){
+  const D=num('L'),t0=num('t0'),v=Math.max(vk,0.1)/3.6;
+  let t=t0,pd=0,rows=[],pts=[[t,0]];
+  for(const s of sorted()){
+    if(s.d>D)continue;
+    t+=(s.d-pd)/v; pts.push([t,s.d]);
+    const arr=t, ph=(((arr-s.o)%s.C)+s.C)%s.C;
+    const green=ph<s.g, wait=green?0:s.C-ph;
+    if(wait>0){t+=wait;pts.push([t,s.d]);}
+    rows.push({arr,green,wait,mg:green?Math.min(ph,s.g-ph):0}); pd=s.d;
+  }
+  t+=(D-pd)/v; pts.push([t,D]);
+  const total=t-t0;
+  return {rows,pts,total,avg:D/total*3.6,stops:rows.filter(r=>r.wait>0).length,minMg:Math.min(...rows.map(x=>x.mg)),waitSum:rows.reduce((a,r)=>a+r.wait,0)};
+}
+
+function scan(){
+  const a=Math.min(num('vmin'),num('vmax')),b=Math.max(num('vmin'),num('vmax')),mg=num('mg');
+  const ok=[];let best=null,opt=null,loose=null;
+  const n=Math.round((b-a)*10);
+  for(let i=0;i<=n;i++){
+    const v=Math.round((b-i/10)*10)/10, r=sim(v);
+    if(r.stops===0){ok.push(v);if(!loose)loose={v,r};if(!opt&&r.minMg>=mg)opt={v,r};}
+    if(!best||r.avg>best.r.avg+1e-9)best={v,r};
+  }
+  return {ok,best,opt:opt||loose||best,reserve:!!opt};
+}
+
+function recFor(s,v){
+  const C=Math.max(s.g+s.r,0.1),mg=num('mg'),pl=num('pl');
+  const arr=num('t0')+s.d/(Math.max(v,0.1)/3.6);
+  const g=Math.round(Math.max(Math.min(pl+2*mg,C-3),1)*10)/10;
+  return {arr,g,r:Math.round((C-g)*10)/10,o:Math.round((((arr-mg)%C)+C)%C*10)/10};
+}
+
+function ranges(arr){
+  if(!arr.length)return[];
+  const s=[...arr].sort((x,y)=>x-y),out=[];let st=s[0],pr=s[0];
+  for(let i=1;i<s.length;i++){if(s[i]-pr>0.15){out.push([st,pr]);st=s[i];}pr=s[i];}
+  out.push([st,pr]);return out;
+}
+
+$('find').onclick=()=>{if(validate().length)return render();$('v').value=f1(scan().opt.v);render();};
+function retime(){
+  if(validate().length)return render();
+  const v=num('v');
+  lights.forEach(s=>{const x=recFor(s,v);s.g=x.g;s.r=x.r;s.o=x.o;});
+  buildTable();render();
+}
+$('opt').onclick=retime;
+$('auto').onclick=()=>{$('v').value=f1(Math.max(num('vmin'),num('vmax')));retime();};
+
+function validate(){
+  const e=[],L=num('L'),v=num('v'),a=num('vmin'),b=num('vmax');
+  if(!(L>=1&&L<=50000))e.push('Длина маршрута: от 1 до 50 000 м');
+  if(!(v>=1&&v<=200))e.push('Скорость автомобиля: от 1 до 200 км/ч');
+  if(!(a>=1))e.push('Минимальная скорость должна быть не меньше 1 км/ч');
+  if(!(b>=a&&b<=200))e.push('Максимальная скорость: не меньше минимальной и не больше 200 км/ч');
+  if(num('t0')<0)e.push('Момент старта не может быть отрицательным');
+  if(!(num('mg')>=0&&num('mg')<=30))e.push('Запас до смены сигнала: от 0 до 30 с');
+  if(!(num('pl')>=0&&num('pl')<=120))e.push('Длина колонны: от 0 до 120 с');
+  if(!lights.length)e.push('Добавьте хотя бы один светофор');
+  lights.forEach((s,i)=>{
+    if(!(s.d>0))e.push(`Светофор ${i+1}: расстояние должно быть больше 0`);
+    if(!(s.g>0))e.push(`Светофор ${i+1}: зелёный должен быть больше 0`);
+    if(!(s.r>=0))e.push(`Светофор ${i+1}: красный не может быть отрицательным`);
+  });
+  return e;
+}
+
+function render(){
+  const er=validate();
+  if(er.length){
+    $('msg').innerHTML='<span class="bad">Проверьте данные:</span><br>'+er.join('<br>');
+    $('kpis').innerHTML='';$('res').innerHTML='';$('chart').innerHTML='';
+    return;
+  }
+  const v=num('v'),r=sim(v),sc=scan(),rg=ranges(sc.ok);
+  const D=num('L'),S=sorted().filter(s=>s.d<=D);
+  let m='';
+  if(r.stops===0)m=`<span class="ok">✔ Зелёная волна есть:</span> при скорости ${f1(v)} км/ч автомобиль проезжает все светофоры без остановок.`;
+  else m=`<span class="bad">✘ При скорости ${f1(v)} км/ч автомобиль останавливается ${r.stops} раз(а).</span>`;
+  if(rg.length)m+=`<br>Скорости без остановок: ${rg.map(x=>x[0]===x[1]?f1(x[0]):f1(x[0])+'–'+f1(x[1])).join('; ')} км/ч.`;
+  else m+=`<br>В диапазоне ${f1(num('vmin'))}–${f1(num('vmax'))} км/ч проезд без остановок невозможен. Попробуйте автоподбор.`;
+  const o=sc.opt;
+  m+=`<br><b>Оптимальная скорость для текущих светофоров: ${f1(o.v)} км/ч</b> — время ${f1(o.r.total)} с, средняя скорость ${f1(o.r.avg)} км/ч${o.r.stops?`, остановок: ${o.r.stops}`:(sc.reserve?'':' (запас до смены сигнала меньше заданного)')}.`;
+  m+=`<br>Если светофоры можно перенастроить, оптимальна максимальная допустимая скорость (${f1(Math.max(num('vmin'),num('vmax')))} км/ч): светофоры подстраиваются под неё кнопкой «Рассчитать всё автоматически». Чтобы рассчитать для другой скорости, измените максимальную.`;
+  $('msg').innerHTML=m;
+  $('kpis').innerHTML=`<div class="kpi"><b>${f1(r.total)} с</b><span>Общее время в пути</span></div>
+  <div class="kpi"><b>${f1(r.avg)} км/ч</b><span>Средняя скорость (с остановками)</span></div>
+  <div class="kpi"><b>${r.stops}</b><span>Остановок на красный</span></div>
+  <div class="kpi"><b>${f1(r.waitSum)} с</b><span>Суммарное ожидание</span></div>
+  <div class="kpi"><b>${f1(D/(Math.max(v,0.1)/3.6))} с</b><span>Время без остановок</span></div>`;
+  $('res').innerHTML=r.rows.map((x,i)=>`<tr><td>${i+1} (${S[i].d} м)</td><td>${f1(x.arr)}</td><td class="${x.green?'ok':'bad'}">${x.green?'Зелёный':'Красный'}</td><td>${f1(x.wait)}</td>${(()=>{const c=recFor(S[i],v);return `<td>${f1(c.g)} (красный ${f1(c.r)})</td><td>${f1(c.o)}</td>`;})()}</tr>`).join('')||'<tr><td colspan="6">Нет светофоров на маршруте</td></tr>';
+  chart(r,S,D);
+}
+
+function chart(r,S,D){
+  const W=900,H=420,ml=52,mr=14,mt=12,mb=34;
+  const maxC=Math.max(60,...S.map(s=>s.C));
+  const T=Math.max(r.pts[r.pts.length-1][0]+15,maxC*2);
+  const X=t=>ml+t/T*(W-ml-mr),Y=d=>H-mb-d/Math.max(D,1)*(H-mt-mb);
+  let g='';
+  for(let i=0;i<=5;i++){const t=T*i/5,d=D*i/5;
+    g+=`<line x1="${X(t)}" y1="${mt}" x2="${X(t)}" y2="${H-mb}" stroke="var(--bd)"/><text x="${X(t)}" y="${H-mb+16}" text-anchor="middle">${Math.round(t)} с</text>`;
+    g+=`<line x1="${ml}" y1="${Y(d)}" x2="${W-mr}" y2="${Y(d)}" stroke="var(--bd)"/><text x="${ml-6}" y="${Y(d)+4}" text-anchor="end">${Math.round(d)} м</text>`;}
+  for(const s of S){
+    const y=Y(s.d);
+    g+=`<line x1="${X(0)}" y1="${y}" x2="${X(T)}" y2="${y}" stroke="var(--rd)" stroke-width="6" opacity=".85"/>`;
+    for(let k=Math.floor(-s.o/s.C)-1;s.o+k*s.C<T;k++){
+      const a=Math.max(0,s.o+k*s.C),b=Math.min(T,s.o+k*s.C+s.g);
+      if(b>a)g+=`<line x1="${X(a)}" y1="${y}" x2="${X(b)}" y2="${y}" stroke="var(--gr)" stroke-width="6"/>`;}
+  }
+  const p=r.pts.map(q=>`${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join(' ');
+  g+=`<polyline points="${p}" fill="none" stroke="var(--car)" stroke-width="3" stroke-linejoin="round"/>`;
+  $('chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="График время-расстояние">${g}</svg>`;
+}
+
+buildTable();render();
+</script>
+</body>
+</html>
